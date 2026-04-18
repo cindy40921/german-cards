@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>德文單字王 - 雲端同步版</title>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <style>
+        :root { --primary: #34495e; --accent: #3498db; --success: #27ae60; --warning: #f39c12; --danger: #e74c3c; --bg: #f0f4f8; }
+        body { font-family: 'PingFang TC', sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; align-items: center; color: var(--primary); }
+        .container { width: 95%; max-width: 500px; padding: 20px 0; }
+        .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); margin-bottom: 15px; }
+        
+        /* 登入區塊 */
+        .auth-card { text-align: center; }
+        .user-info { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; margin-bottom: 10px; }
+        .user-avatar { width: 30px; height: 30px; border-radius: 50%; }
+
+        /* 簽到進度條 */
+        .checkin-status { font-weight: bold; margin-bottom: 10px; display: flex; justify-content: space-between; }
+        .progress-outer { width: 100%; height: 12px; background: #eee; border-radius: 10px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: 0.5s; }
+        .completed .progress-fill { background: var(--success); }
+
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 15px; text-align: center; font-size: 0.8rem; }
+        .stat-box { padding: 10px; border-radius: 10px; background: #f8f9fa; }
+        .tag { padding: 2px 8px; border-radius: 5px; font-size: 0.75rem; margin-left: 5px; font-weight: bold; }
+        .tag-good { background: #e8f5e9; color: var(--success); }
+        .tag-mid { background: #fff3e0; color: var(--warning); }
+        .tag-bad { background: #ffebee; color: var(--danger); }
+
+        input, select { width: 100%; padding: 12px; margin: 8px 0; border: 2px solid #f1f1f1; border-radius: 10px; font-size: 16px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 16px; margin-top: 8px; transition: 0.2s; }
+        .btn-main { background: var(--accent); color: white; }
+        .btn-google { background: white; color: #444; border: 1px solid #ddd; }
+        .btn-outline { background: #f8f9fa; color: #666; border: 1px solid #ddd; }
+        
+        .word-list { margin-top: 15px; max-height: 400px; overflow-y: auto; }
+        .word-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
+        
+        #app-content, #quiz-screen { display: none; }
+        .word-q { font-size: 2.2rem; text-align: center; margin: 30px 0; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="login-screen" class="card auth-card">
+        <h2>🇩🇪 德文同步單字卡</h2>
+        <p>請登入以同步手機與電腦進度</p>
+        <button class="btn-google" onclick="login()">使用 Google 帳號登入</button>
+    </div>
+
+    <div id="app-content">
+        <div class="card">
+            <div class="user-info">
+                <img id="user-img" class="user-avatar">
+                <span id="user-name"></span>
+                <button style="width:auto; padding:5px; font-size:0.7rem;" class="btn-outline" onclick="logout()">登出</button>
+            </div>
+            <div class="checkin-status">
+                <span id="date-label">今日簽到進度</span>
+                <span id="checkin-count">0 / 20</span>
+            </div>
+            <div class="progress-outer"><div id="progress-fill" class="progress-fill"></div></div>
+            <div class="stats-grid">
+                <div class="stat-box">🥳 精熟<br><b id="count-good">0</b></div>
+                <div class="stat-box">😲 加油<br><b id="count-mid">0</b></div>
+                <div class="stat-box">🤕 練練<br><b id="count-bad">0</b></div>
+            </div>
+        </div>
+
+        <div id="main-ui">
+            <div class="card">
+                <input type="text" id="word" placeholder="德文單字">
+                <select id="gender">
+                    <option value="">無詞性</option>
+                    <option value="der">der</option><option value="die">die</option><option value="das">das</option>
+                </select>
+                <input type="text" id="meaning" placeholder="中文翻譯">
+                <button class="btn-main" onclick="saveWord()">儲存到雲端</button>
+                <button class="btn-outline" onclick="startQuiz()">🔥 開始抽考 (<span id="todo-count">0</span>)</button>
+            </div>
+            <div class="card">
+                <h3>🗂 我的字庫</h3>
+                <div id="word-list" class="word-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="quiz-screen" class="card">
+        <div id="q-text" class="word-q">---</div>
+        <input type="text" id="answer" placeholder="拼出德文..." autocomplete="off">
+        <div id="feedback" style="text-align:center; min-height:30px; margin:15px 0;"></div>
+        <button class="btn-main" onclick="check()">送出</button>
+        <button class="btn-outline" onclick="exitQuiz()">返回</button>
+    </div>
+</div>
+
+<script>
+   // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyD9Oo60Y5pJFQTJY_gwoJxply_nAFOqc_Y",
+  authDomain: "german-vocab-app-c5eea.firebaseapp.com",
+  projectId: "german-vocab-app-c5eea",
+  storageBucket: "german-vocab-app-c5eea.firebasestorage.app",
+  messagingSenderId: "11516321032",
+  appId: "1:11516321032:web:f63b08e7d84f8ea3f5a0bd",
+  measurementId: "G-CY4440QSC6"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT.appspot.com",
+        messagingSenderId: "YOUR_ID",
+        appId: "YOUR_APP_ID"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    
+    let currentUser = null;
+    let words = [];
+    let dailyLog = {};
+    let quizPool = [];
+    let currentQ = null;
+
+    // --- 登入邏輯 ---
+    function login() {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        auth.signInWithPopup(provider);
+    }
+
+    function logout() { auth.signOut(); location.reload(); }
+
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            currentUser = user;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-content').style.display = 'block';
+            document.getElementById('user-name').innerText = user.displayName;
+            document.getElementById('user-img').src = user.photoURL;
+            loadData(); // 登入後讀取雲端資料
+        }
+    });
+
+    // --- 雲端資料同步 ---
+    async function loadData() {
+        const doc = await db.collection("users").doc(currentUser.uid).get();
+        if (doc.exists) {
+            const data = doc.data();
+            words = data.words || [];
+            dailyLog = data.dailyLog || {};
+        }
+        updateUI();
+    }
+
+    async function syncToCloud() {
+        if (!currentUser) return;
+        await db.collection("users").doc(currentUser.uid).set({
+            words: words,
+            dailyLog: dailyLog
+        });
+        updateUI();
+    }
+
+    // --- 原有邏輯改寫為同步版 ---
+    function updateUI() {
+        const today = new Date().toISOString().split('T')[0];
+        const score = dailyLog[today] || 0;
+        document.getElementById('checkin-count').innerText = `${score} / 20`;
+        document.getElementById('progress-fill').style.width = Math.min((score/20)*100, 100) + '%';
+
+        let counts = { good: 0, mid: 0, bad: 0 };
+        const listEl = document.getElementById('word-list');
+        listEl.innerHTML = words.map((w, index) => {
+            let tag = '精熟🥳', cls = 'tag-good';
+            if(w.wrongCount > 5) { tag = '再練練吧🤕'; cls = 'tag-bad'; counts.bad++; }
+            else if(w.wrongCount > 1) { tag = '再加油😲'; cls = 'tag-mid'; counts.mid++; }
+            else { counts.good++; }
+            
+            return `<div class="word-item">
+                <div><b>${w.gender||''} ${w.word}</b> <span class="tag ${cls}">${tag}</span><br><small>${w.meaning}</small></div>
+                <button style="width:auto; color:red; background:none" onclick="deleteWord(${index})">🗑</button>
+            </div>`;
+        }).reverse().join('');
+
+        document.getElementById('count-good').innerText = counts.good;
+        document.getElementById('count-mid').innerText = counts.mid;
+        document.getElementById('count-bad').innerText = counts.bad;
+        document.getElementById('todo-count').innerText = words.length;
+    }
+
+    async function saveWord() {
+        const word = document.getElementById('word').value.trim();
+        const meaning = document.getElementById('meaning').value.trim();
+        if(!word || !meaning) return;
+        words.push({ word, gender: document.getElementById('gender').value, meaning, wrongCount: 0 });
+        await syncToCloud();
+        document.getElementById('word').value = ''; document.getElementById('meaning').value = '';
+    }
+
+    async function deleteWord(i) {
+        words.splice(i, 1);
+        await syncToCloud();
+    }
+
+    function startQuiz() {
+        quizPool = [...words];
+        document.getElementById('main-ui').style.display = 'none';
+        document.getElementById('quiz-screen').style.display = 'block';
+        showNext();
+    }
+
+    function showNext() {
+        if(quizPool.length === 0) return exitQuiz();
+        currentQ = quizPool[Math.floor(Math.random()*quizPool.length)];
+        document.getElementById('q-text').innerText = currentQ.meaning;
+        document.getElementById('answer').value = '';
+        document.getElementById('answer').focus();
+    }
+
+    async function check() {
+        const input = document.getElementById('answer').value.trim().toLowerCase();
+        const correct = ((currentQ.gender ? currentQ.gender+" " : "") + currentQ.word).toLowerCase();
+        if(input === correct) {
+            const today = new Date().toISOString().split('T')[0];
+            dailyLog[today] = (dailyLog[today] || 0) + 1;
+            quizPool = quizPool.filter(w => w !== currentQ);
+            document.getElementById('feedback').innerHTML = "✅ Richtig!";
+            await syncToCloud();
+            setTimeout(showNext, 800);
+        } else {
+            currentQ.wrongCount = (currentQ.wrongCount || 0) + 1;
+            document.getElementById('feedback').innerHTML = "❌ 答案是: " + correct;
+            await syncToCloud();
+        }
+    }
+
+    function exitQuiz() {
+        document.getElementById('main-ui').style.display = 'block';
+        document.getElementById('quiz-screen').style.display = 'none';
+    }
+</script>
+</body>
+</html>
