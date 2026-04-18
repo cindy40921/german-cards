@@ -100,23 +100,14 @@
 </div>
 
 <script>
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyD9Oo60Y5pJFQTJY_gwoJxply_nAFOqc_Y",
-  authDomain: "german-vocab-app-c5eea.firebaseapp.com",
-  projectId: "german-vocab-app-c5eea",
-  storageBucket: "german-vocab-app-c5eea.firebasestorage.app",
-  messagingSenderId: "11516321032",
-  appId: "1:11516321032:web:f63b08e7d84f8ea3f5a0bd",
-  measurementId: "G-CY4440QSC6"
-};
+    // --- Firebase 配置 (已套用 cindy40921 的專案金鑰) ---
     const firebaseConfig = {
-        apiKey: "YOUR_API_KEY",
-        authDomain: "YOUR_PROJECT.firebaseapp.com",
-        projectId: "YOUR_PROJECT_ID",
-        storageBucket: "YOUR_PROJECT.appspot.com",
-        messagingSenderId: "YOUR_ID",
-        appId: "YOUR_APP_ID"
+        apiKey: "AIzaSyD90o60Y5pJFQTJY_gwoJxply_nAF0qc_Y",
+        authDomain: "german-vocab-app-c5eea.firebaseapp.com",
+        projectId: "german-vocab-app-c5eea",
+        storageBucket: "german-vocab-app-c5eea.firebasestorage.app",
+        messagingSenderId: "11516321032",
+        appId: "1:11516321032:web:f63b08e7d84f8ea3f5a0bd"
     };
 
     firebase.initializeApp(firebaseConfig);
@@ -144,7 +135,7 @@ const firebaseConfig = {
             document.getElementById('app-content').style.display = 'block';
             document.getElementById('user-name').innerText = user.displayName;
             document.getElementById('user-img').src = user.photoURL;
-            loadData(); // 登入後讀取雲端資料
+            loadData(); 
         }
     });
 
@@ -168,7 +159,6 @@ const firebaseConfig = {
         updateUI();
     }
 
-    // --- 原有邏輯改寫為同步版 ---
     function updateUI() {
         const today = new Date().toISOString().split('T')[0];
         const score = dailyLog[today] || 0;
